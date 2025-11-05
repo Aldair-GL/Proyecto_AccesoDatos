@@ -4,43 +4,68 @@ import org.gestion.dao.ClienteDAO;
 import org.gestion.model.Cliente;
 
 import java.io.*;
-import java.util.*;
+import java.nio.file.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 public class FileClienteDAO implements ClienteDAO {
-    private final File file;
+    private final Path path;
 
-    public FileClienteDAO(String filepath) { this.file = new File(filepath); }
+    public FileClienteDAO(String filepath) {
+        this.path = Paths.get(filepath);
+        ensureFile();
+    }
+
+    private void ensureFile() {
+        try {
+            if (Files.notExists(path)) {
+                Files.createDirectories(path.getParent());
+                Files.writeString(path, "id,nombre,direccion,historialCompras\n", StandardOpenOption.CREATE);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private List<Cliente> readAll() throws IOException {
         List<Cliente> list = new ArrayList<>();
-        if(!file.exists()) return list;
-        try(BufferedReader br = new BufferedReader(new FileReader(file))) {
+        if (Files.notExists(path)) return list;
+        try (BufferedReader br = Files.newBufferedReader(path)) {
             String line;
-            while((line = br.readLine()) != null) {
-                if(line.trim().isEmpty()) continue;
-                if(line.startsWith("id,")) continue; // cabecera
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                if (line.startsWith("id,")) continue;
                 String[] parts = line.split(",", -1);
-                int id = Integer.parseInt(parts[0]);
-                String nombre = parts[1];
-                String direccion = parts[2];
-                String historial = parts.length > 3 ? parts[3] : ""; // por si el campo está vacío
-                list.add(new Cliente(id,nombre,direccion).setHistorialCompras(historial.replace(";", ",")));
+                if (parts.length < 3) continue;
+                try {
+                    int id = Integer.parseInt(parts[0].trim());
+                    String nombre = parts[1].trim();
+                    String direccion = parts[2].trim();
+                    String historial = parts.length > 3 ? parts[3].trim() : "";
+                    Cliente c = new Cliente(id, nombre, direccion);
+                    c.setHistorialCompras(historial);
+                    list.add(c);
+                } catch (NumberFormatException ignored) {
+                    System.out.println("Fila cliente ignorada por formato: " + line);
+                }
             }
         }
         return list;
     }
 
     private void writeAll(List<Cliente> clientes) throws IOException {
-        try(PrintWriter pw = new PrintWriter(new FileWriter(file,false))) {
+        Path tmp = path.resolveSibling(path.getFileName().toString() + ".tmp");
+        try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(tmp, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING))) {
             pw.println("id,nombre,direccion,historialCompras");
-            for(Cliente c : clientes) {
-                pw.printf("%d,%s,%s,%s%n",
-                        c.getId(),
-                        c.getNombre(),
-                        c.getDireccion(),
-                        c.getHistorialCompras().replace(",", ";")); // evitar comas rotas
+            for (Cliente c : clientes) {
+                String nombre = c.getNombre() != null ? c.getNombre().replace(",", " ") : "";
+                String direccion = c.getDireccion() != null ? c.getDireccion().replace(",", " ") : "";
+                String hist = c.getHistorialCompras(); // "1;2;3"
+                pw.printf("%d,%s,%s,%s%n", c.getId(), nombre, direccion, hist);
             }
         }
+        Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     @Override
@@ -57,21 +82,26 @@ public class FileClienteDAO implements ClienteDAO {
     public boolean delete(int id) throws IOException {
         List<Cliente> all = readAll();
         boolean removed = all.removeIf(x -> x.getId() == id);
-        if(removed) writeAll(all);
+        if (removed) writeAll(all);
         return removed;
     }
 
     @Override
     public Cliente update(Cliente c) throws IOException {
         List<Cliente> all = readAll();
-        for(int i=0; i<all.size(); i++) {
-            if(all.get(i).getId() == c.getId()) {
+        boolean found = false;
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).getId() == c.getId()) {
                 all.set(i, c);
-                writeAll(all);
-                return c;
+                found = true;
+                break;
             }
         }
-        throw new RuntimeException("Cliente no encontrado");
+        if (!found) {
+            all.add(c);
+        }
+        writeAll(all);
+        return c;
     }
 
     @Override

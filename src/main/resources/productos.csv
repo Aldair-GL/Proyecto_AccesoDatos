@@ -1,6 +1,7 @@
 id,nombre,precio,stock
-1,Levadura,1,000000,0
-2,Martillo,12,000000,0
-3,Casco,5,000000,0
-4,Espada,10,000000,0
-5,Hacha,25,000000,10
+1,Levadura,1,00,500
+2,Martillo,12,00,500
+3,Casco,5,00,500
+4,Espada,10,00,500
+5,Hacha,25,00,500
+6,Red,50,00,500

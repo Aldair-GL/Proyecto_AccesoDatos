@@ -72,13 +72,11 @@ public class VentaService {
             Producto p = productoMap.get(e.getKey());
             total += p.getPrecio() * e.getValue();
         }
-        int maxVentaId = ventas.stream().mapToInt(v -> v.getId()).max().orElse(0);
-        Venta nueva = new Venta();
-        nueva.setId(maxVentaId + 1);
-        nueva.setClienteId(clienteId);
-        nueva.setFecha(LocalDateTime.now());
-        nueva.setItems(items);
-        nueva.setTotal(total);
+        int nuevoId = ventas.stream().mapToInt(Venta::getId).max().orElse(0) + 1;
+        LocalDateTime fechaActual = LocalDateTime.now();
+
+        Venta nueva = new Venta(nuevoId, clienteId, fechaActual, items, total);
+
 
         cliente.getHistorialComprasIds().add(nueva.getId());
 
