@@ -7,7 +7,7 @@ public class Cliente {
     private int id;
     private String nombre;
     private String direccion;
-    private List<Integer> historialComprasIds = new ArrayList<>(); // ids de ventas
+    private List<Integer> historialComprasIds = new ArrayList<>();
 
     public Cliente() {}
 
@@ -17,7 +17,6 @@ public class Cliente {
         this.direccion = direccion;
     }
 
-    // getters y setters
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 
@@ -30,31 +29,30 @@ public class Cliente {
     public List<Integer> getHistorialComprasIds() { return historialComprasIds; }
     public void setHistorialComprasIds(List<Integer> historialComprasIds) { this.historialComprasIds = historialComprasIds; }
 
-    // Devuelve historial como "1;2;3"
-    public String getHistorialCompras() {
+    // CSV helpers
+    public String getHistorialComprasCsv() {
+        if (historialComprasIds == null || historialComprasIds.isEmpty()) return "";
         StringBuilder sb = new StringBuilder();
-        for (int id : historialComprasIds) {
+        for (Integer id : historialComprasIds) {
             if (sb.length() > 0) sb.append(";");
             sb.append(id);
         }
         return sb.toString();
     }
 
-    // Recibe cadena "1;2;3" o "" y rellena la lista
-    public Cliente setHistorialCompras(String raw) {
+    public void setHistorialFromCsv(String csv) {
         historialComprasIds.clear();
-        if (raw == null || raw.isBlank()) return this;
-        String[] parts = raw.split(";");
+        if (csv == null || csv.isBlank()) return;
+        String[] parts = csv.split(";");
         for (String p : parts) {
-            try {
-                historialComprasIds.add(Integer.parseInt(p.trim()));
-            } catch (NumberFormatException ignored) {}
+            try { historialComprasIds.add(Integer.parseInt(p.trim())); }
+            catch (NumberFormatException ignored) {}
         }
-        return this;
     }
 
     @Override
     public String toString() {
-        return "Cliente{id=" + id + ", nombre='" + nombre + "', direccion='" + direccion + "', historial=" + getHistorialCompras() + "}";
+        return "Cliente{id=" + id + ", nombre='" + nombre + "', direccion='" + direccion +
+                "', historialVentas=" + historialComprasIds + "}";
     }
 }

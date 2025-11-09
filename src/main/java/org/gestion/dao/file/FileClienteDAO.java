@@ -21,21 +21,19 @@ public class FileClienteDAO implements ClienteDAO {
         try {
             if (Files.notExists(path)) {
                 Files.createDirectories(path.getParent());
-                Files.writeString(path, "id,nombre,direccion,historialCompras\n", StandardOpenOption.CREATE);
+                Files.writeString(path, "id,nombre,direccion,historialVentas\n", StandardOpenOption.CREATE);
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error creando clientes.csv", e);
         }
     }
 
     private List<Cliente> readAll() throws IOException {
         List<Cliente> list = new ArrayList<>();
-        if (Files.notExists(path)) return list;
         try (BufferedReader br = Files.newBufferedReader(path)) {
             String line;
             while ((line = br.readLine()) != null) {
-                if (line.trim().isEmpty()) continue;
-                if (line.startsWith("id,")) continue;
+                if (line.trim().isEmpty() || line.startsWith("id,")) continue;
                 String[] parts = line.split(",", -1);
                 if (parts.length < 3) continue;
                 try {
@@ -44,10 +42,10 @@ public class FileClienteDAO implements ClienteDAO {
                     String direccion = parts[2].trim();
                     String historial = parts.length > 3 ? parts[3].trim() : "";
                     Cliente c = new Cliente(id, nombre, direccion);
-                    c.setHistorialCompras(historial);
+                    c.setHistorialFromCsv(historial);
                     list.add(c);
                 } catch (NumberFormatException ignored) {
-                    System.out.println("Fila cliente ignorada por formato: " + line);
+                    System.out.println("Fila cliente ignorada: " + line);
                 }
             }
         }
@@ -55,39 +53,27 @@ public class FileClienteDAO implements ClienteDAO {
     }
 
     private void writeAll(List<Cliente> clientes) throws IOException {
-        Path tmp = path.resolveSibling(path.getFileName().toString() + ".tmp");
-        try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(tmp, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING))) {
-            pw.println("id,nombre,direccion,historialCompras");
+        try (BufferedWriter bw = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING)) {
+            bw.write("id,nombre,direccion,historialVentas\n");
             for (Cliente c : clientes) {
-                String nombre = c.getNombre() != null ? c.getNombre().replace(",", " ") : "";
-                String direccion = c.getDireccion() != null ? c.getDireccion().replace(",", " ") : "";
-                String hist = c.getHistorialCompras(); // "1;2;3"
-                pw.printf("%d,%s,%s,%s%n", c.getId(), nombre, direccion, hist);
+                String nombre = c.getNombre() == null ? "" : c.getNombre().replace(",", " ");
+                String dir = c.getDireccion() == null ? "" : c.getDireccion().replace(",", " ");
+                bw.write(c.getId() + "," + nombre + "," + dir + "," + c.getHistorialComprasCsv() + "\n");
             }
         }
-        Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     @Override
-    public Cliente add(Cliente c) throws IOException {
+    public void add(Cliente c) throws IOException {
         List<Cliente> all = readAll();
         int maxId = all.stream().mapToInt(Cliente::getId).max().orElse(0);
         c.setId(maxId + 1);
         all.add(c);
         writeAll(all);
-        return c;
     }
 
     @Override
-    public boolean delete(int id) throws IOException {
-        List<Cliente> all = readAll();
-        boolean removed = all.removeIf(x -> x.getId() == id);
-        if (removed) writeAll(all);
-        return removed;
-    }
-
-    @Override
-    public Cliente update(Cliente c) throws IOException {
+    public void update(Cliente c) throws IOException {
         List<Cliente> all = readAll();
         boolean found = false;
         for (int i = 0; i < all.size(); i++) {
@@ -97,16 +83,20 @@ public class FileClienteDAO implements ClienteDAO {
                 break;
             }
         }
-        if (!found) {
-            all.add(c);
-        }
+        if (!found) all.add(c);
         writeAll(all);
-        return c;
+    }
+
+    @Override
+    public void delete(int id) throws IOException {
+        List<Cliente> all = readAll();
+        boolean removed = all.removeIf(cli -> cli.getId() == id);
+        if (removed) writeAll(all);
     }
 
     @Override
     public Optional<Cliente> findById(int id) throws IOException {
-        return readAll().stream().filter(x -> x.getId() == id).findFirst();
+        return readAll().stream().filter(c -> c.getId() == id).findFirst();
     }
 
     @Override

@@ -1,7 +1,4 @@
 id,nombre,precio,stock
-1,Levadura,1,00,500
-2,Martillo,12,00,500
-3,Casco,5,00,500
-4,Espada,10,00,500
-5,Hacha,25,00,500
-6,Red,50,00,500
+1,Espada,10.0,5
+2,Escudo,7.5,3
+3,Arco,8.9,5

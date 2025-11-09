@@ -1,14 +1,14 @@
 package org.gestion.dao;
 
 import org.gestion.model.Cliente;
-import org.gestion.model.Producto;
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
 public interface ClienteDAO {
-    Cliente add(Cliente c) throws Exception;
-    boolean delete(int id) throws Exception;
-    Cliente update(Cliente c) throws Exception;
-    Optional<Cliente> findById(int id) throws Exception;
-    List<Cliente> findAll() throws Exception;
+    void add(Cliente c) throws IOException;         // asigna id
+    void update(Cliente c) throws IOException;
+    void delete(int id) throws IOException;
+    Optional<Cliente> findById(int id) throws IOException;
+    List<Cliente> findAll() throws IOException;
 }
