@@ -1,14 +1,10 @@
 package org.gestion;
 
-import org.gestion.dao.file.FileClienteDAO;
-import org.gestion.dao.file.FileProductoDAO;
-import org.gestion.dao.file.FileVentaDAO;
-import org.gestion.model.Cliente;
-import org.gestion.model.Producto;
-import org.gestion.model.Venta;
-import org.gestion.service.ClienteService;
-import org.gestion.service.ProductoService;
-import org.gestion.service.VentaService;
+import org.gestion.dao.*;
+import org.gestion.dao.file.*;
+import org.gestion.dao.jdbc.*;
+import org.gestion.model.*;
+import org.gestion.service.*;
 
 import java.io.IOException;
 import java.util.*;
@@ -20,15 +16,69 @@ public class App {
     private static final String VEN_CSV  = "src/main/resources/ventas.csv";
 
     public static void main(String[] args) throws Exception {
-        var productoDAO = new FileProductoDAO(PROD_CSV);
-        var clienteDAO  = new FileClienteDAO(CLI_CSV);
-        var ventaDAO    = new FileVentaDAO(VEN_CSV);
-
-        var productoSrv = new ProductoService(productoDAO);
-        var clienteSrv  = new ClienteService(clienteDAO);
-        var ventaSrv    = new VentaService(productoDAO, clienteDAO, ventaDAO);
 
         Scanner sc = new Scanner(System.in);
+
+        System.out.println("===== SELECCIONE MODO DE OPERACIÓN =====");
+        System.out.println("1) Modo Ficheros CSV");
+        System.out.println("2) Modo Base de Datos JDBC");
+        System.out.println("3) Migrar datos desde CSV → BD");
+        System.out.print("Opción: ");
+
+        int modo = leerInt(sc);
+
+        ProductoDAO productoDAO;
+        ClienteDAO clienteDAO;
+        VentaDAO ventaDAO;
+
+        switch (modo) {
+
+            case 1 -> {
+                System.out.println("📁 Modo FICHEROS CSV activado.");
+
+                productoDAO = new FileProductoDAO(PROD_CSV);
+                clienteDAO  = new FileClienteDAO(CLI_CSV);
+                ventaDAO    = new FileVentaDAO(VEN_CSV);
+            }
+
+            case 2 -> {
+                System.out.println("🗄 Modo BASE DE DATOS JDBC activado.");
+
+                productoDAO = new JdbcProductoDAO();
+                clienteDAO  = new JdbcClienteDAO();
+                ventaDAO    = new JdbcVentaDAO();
+            }
+
+            case 3 -> {
+                migrarCSVaBD();
+                return;
+            }
+
+            default -> {
+                System.out.println("Opción no válida.");
+                return;
+            }
+        }
+
+        // Services universales (funcionan igual con CSV o BD)
+        ProductoService productoSrv = new ProductoService(productoDAO);
+        ClienteService clienteSrv   = new ClienteService(clienteDAO);
+        VentaService ventaSrv       = new VentaService(productoDAO, clienteDAO, ventaDAO);
+
+        ejecutarMenuPrincipal(sc, productoSrv, clienteSrv, ventaSrv);
+
+        System.out.println("Programa finalizado ✅.");
+    }
+
+    // =============================================================
+    // ====================== MENÚ PRINCIPAL ========================
+    // =============================================================
+
+    private static void ejecutarMenuPrincipal(Scanner sc,
+                                              ProductoService productoSrv,
+                                              ClienteService clienteSrv,
+                                              VentaService ventaSrv) throws Exception {
+
         boolean salir = false;
 
         while (!salir) {
@@ -38,24 +88,22 @@ public class App {
             System.out.println("3) Ventas");
             System.out.println("0) Salir");
             System.out.print("Opción: ");
+
             int op = leerInt(sc);
 
-            try {
-                switch (op) {
-                    case 1 -> menuProductos(sc, productoSrv);
-                    case 2 -> menuClientes(sc, clienteSrv);
-                    case 3 -> menuVentas(sc, productoSrv, clienteSrv, ventaSrv);
-                    case 0 -> salir = true;
-                    default -> System.out.println("Opción no válida");
-                }
-            } catch (Exception ex) {
-                System.out.println("⚠ Error: " + ex.getMessage());
+            switch (op) {
+                case 1 -> menuProductos(sc, productoSrv);
+                case 2 -> menuClientes(sc, clienteSrv);
+                case 3 -> menuVentas(sc, productoSrv, clienteSrv, ventaSrv);
+                case 0 -> salir = true;
+                default -> System.out.println("Opción no válida");
             }
         }
-        System.out.println("Programa finalizado.");
     }
 
-    // ====== SUBMENÚS ======
+    // =============================================================
+    // =========================== MENÚS ============================
+    // =============================================================
 
     private static void menuProductos(Scanner sc, ProductoService srv) throws IOException {
         boolean back = false;
@@ -67,41 +115,51 @@ public class App {
             System.out.println("4) Eliminar");
             System.out.println("0) Volver");
             System.out.print("Opción: ");
+
             int op = leerInt(sc);
 
             switch (op) {
                 case 1 -> srv.list().forEach(System.out::println);
+
                 case 2 -> {
                     System.out.print("Nombre: "); String n = sc.nextLine();
-                    System.out.print("Precio: "); double pr = leerDouble(sc);
-                    System.out.print("Stock: "); int st = leerInt(sc);
-                    var p = srv.add(n, pr, st);
-                    System.out.println("Añadido: " + p);
+                    System.out.print("Precio: "); double p = leerDouble(sc);
+                    System.out.print("Stock: "); int s = leerInt(sc);
+                    var obj = srv.add(n, p, s);
+                    System.out.println("✅ Añadido: " + obj);
                 }
-                case 3 -> {
-                    System.out.print("ID del producto: "); int id = leerInt(sc);
-                    var pOpt = srv.findById(id);
-                    if (pOpt.isEmpty()) { System.out.println("No existe."); break; }
-                    var p = pOpt.get();
-                    System.out.println("Actual: " + p);
-                    System.out.print("Nuevo nombre (enter para mantener): "); String n = sc.nextLine();
-                    System.out.print("Nuevo precio (-1 para mantener): "); double pr = leerDouble(sc);
-                    System.out.print("Nuevo stock (-1 para mantener): "); int st = leerInt(sc);
 
+                case 3 -> {
+                    System.out.print("ID: "); int id = leerInt(sc);
+                    var p = srv.findById(id).orElse(null);
+                    if (p == null) { System.out.println("No existe."); break; }
+
+                    System.out.println("Actual: " + p);
+
+                    System.out.print("Nuevo nombre (enter = igual): ");
+                    String n = sc.nextLine();
                     if (!n.isBlank()) p.setNombre(n);
+
+                    System.out.print("Nuevo precio (-1 = igual): ");
+                    double pr = leerDouble(sc);
                     if (pr >= 0) p.setPrecio(pr);
+
+                    System.out.print("Nuevo stock (-1 = igual): ");
+                    int st = leerInt(sc);
                     if (st >= 0) p.setStock(st);
 
                     srv.update(p);
-                    System.out.println("Actualizado: " + p);
+                    System.out.println("✅ Actualizado.");
                 }
+
                 case 4 -> {
                     System.out.print("ID a eliminar: "); int id = leerInt(sc);
                     srv.delete(id);
-                    System.out.println("Eliminado.");
+                    System.out.println("✅ Eliminado.");
                 }
+
                 case 0 -> back = true;
-                default -> System.out.println("Opción no válida");
+                default -> System.out.println("Opción no válida.");
             }
         }
     }
@@ -116,38 +174,44 @@ public class App {
             System.out.println("4) Eliminar");
             System.out.println("0) Volver");
             System.out.print("Opción: ");
+
             int op = leerInt(sc);
 
             switch (op) {
                 case 1 -> srv.list().forEach(System.out::println);
+
                 case 2 -> {
                     System.out.print("Nombre: "); String n = sc.nextLine();
                     System.out.print("Dirección: "); String d = sc.nextLine();
                     var c = srv.add(n, d);
-                    System.out.println("Añadido: " + c);
+                    System.out.println("✅ Añadido: " + c);
                 }
-                case 3 -> {
-                    System.out.print("ID del cliente: "); int id = leerInt(sc);
-                    var cOpt = srv.findById(id);
-                    if (cOpt.isEmpty()) { System.out.println("No existe."); break; }
-                    var c = cOpt.get();
-                    System.out.println("Actual: " + c);
-                    System.out.print("Nuevo nombre (enter para mantener): "); String n = sc.nextLine();
-                    System.out.print("Nueva dirección (enter para mantener): "); String d = sc.nextLine();
 
+                case 3 -> {
+                    System.out.print("ID: "); int id = leerInt(sc);
+                    var c = srv.findById(id).orElse(null);
+                    if (c == null) { System.out.println("No existe."); break; }
+
+                    System.out.print("Nuevo nombre (enter = igual): ");
+                    String n = sc.nextLine();
                     if (!n.isBlank()) c.setNombre(n);
+
+                    System.out.print("Nueva dirección (enter = igual): ");
+                    String d = sc.nextLine();
                     if (!d.isBlank()) c.setDireccion(d);
 
                     srv.update(c);
-                    System.out.println("Actualizado: " + c);
+                    System.out.println("✅ Actualizado.");
                 }
+
                 case 4 -> {
                     System.out.print("ID a eliminar: "); int id = leerInt(sc);
                     srv.delete(id);
-                    System.out.println("Eliminado.");
+                    System.out.println("✅ Eliminado.");
                 }
+
                 case 0 -> back = true;
-                default -> System.out.println("Opción no válida");
+                default -> System.out.println("Opción no válida.");
             }
         }
     }
@@ -156,56 +220,93 @@ public class App {
         boolean back = false;
         while (!back) {
             System.out.println("\n--- Ventas ---");
-            System.out.println("1) Listar ventas");
+            System.out.println("1) Listar");
             System.out.println("2) Registrar venta");
             System.out.println("3) Eliminar venta");
             System.out.println("0) Volver");
             System.out.print("Opción: ");
+
             int op = leerInt(sc);
 
             switch (op) {
                 case 1 -> vSrv.listar().forEach(System.out::println);
+
                 case 2 -> {
-                    System.out.print("ID cliente: "); int clienteId = leerInt(sc);
-                    Map<Integer, Integer> items = new LinkedHashMap<>();
+                    System.out.print("ID cliente: "); int cid = leerInt(sc);
+
+                    Map<Integer,Integer> items = new LinkedHashMap<>();
                     boolean more = true;
+
                     while (more) {
                         System.out.print("ID producto: "); int pid = leerInt(sc);
                         System.out.print("Cantidad: "); int qty = leerInt(sc);
                         items.merge(pid, qty, Integer::sum);
-                        System.out.print("¿Añadir otro producto? (s/n): ");
-                        String r = sc.nextLine().trim();
-                        more = r.equalsIgnoreCase("s");
+
+                        System.out.print("¿Añadir otro? (s/n): ");
+                        more = sc.nextLine().equalsIgnoreCase("s");
                     }
-                    Venta v = vSrv.registrarVenta(clienteId, items);
-                    System.out.println("Venta registrada: " + v);
+
+                    var v = vSrv.registrarVenta(cid, items);
+                    System.out.println("✅ Venta registrada: " + v);
                 }
+
                 case 3 -> {
-                    System.out.print("ID de venta a eliminar: "); int vid = leerInt(sc);
-                    vSrv.eliminarVenta(vid);
-                    System.out.println("Venta eliminada y stock restaurado.");
+                    System.out.print("ID venta: "); int id = leerInt(sc);
+                    vSrv.eliminarVenta(id);
+                    System.out.println("✅ Venta eliminada y stock restaurado.");
                 }
+
                 case 0 -> back = true;
-                default -> System.out.println("Opción no válida");
+                default -> System.out.println("Opción no válida.");
             }
         }
     }
 
-    // ====== Utils de lectura segura ======
+    // =============================================================
+    // ======================= MIGRACIÓN BD =========================
+    // =============================================================
+
+    private static void migrarCSVaBD() throws Exception {
+
+        System.out.println("🚀 Migrando datos CSV → BD...");
+
+        // DAOs CSV
+        var csvProd = new FileProductoDAO(PROD_CSV);
+        var csvCli  = new FileClienteDAO(CLI_CSV);
+        var csvVen  = new FileVentaDAO(VEN_CSV);
+
+        // DAOs JDBC
+        var bdProd = new JdbcProductoDAO();
+        var bdCli  = new JdbcClienteDAO();
+        var bdVen  = new JdbcVentaDAO();
+
+        // 1) Migrar productos
+        for (var p : csvProd.findAll()) bdProd.add(p);
+
+        // 2) Migrar clientes
+        for (var c : csvCli.findAll()) bdCli.add(c);
+
+        // 3) Migrar ventas
+        for (var v : csvVen.findAll()) bdVen.add(v);
+
+        System.out.println("✅ Migración completada correctamente.");
+    }
+
+    // =============================================================
+    // ========================= UTILIDADES =========================
+    // =============================================================
 
     private static int leerInt(Scanner sc) {
         while (true) {
-            String s = sc.nextLine().trim();
-            try { return Integer.parseInt(s); }
-            catch (NumberFormatException e) { System.out.print("Ingresa un entero válido: "); }
+            try { return Integer.parseInt(sc.nextLine().trim()); }
+            catch (Exception e) { System.out.print("Número inválido: "); }
         }
     }
 
     private static double leerDouble(Scanner sc) {
         while (true) {
-            String s = sc.nextLine().trim();
-            try { return Double.parseDouble(s); }
-            catch (NumberFormatException e) { System.out.print("Ingresa un número válido: "); }
+            try { return Double.parseDouble(sc.nextLine().trim()); }
+            catch (Exception e) { System.out.print("Número inválido: "); }
         }
     }
 }
