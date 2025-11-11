@@ -108,14 +108,33 @@ public class JdbcVentaDAO implements VentaDAO {
     // ===== Helpers =====
 
     private Venta buildVenta(ResultSet rs) throws SQLException {
+
         int id = rs.getInt("id");
-        int clienteId = rs.getInt("clienteId");
-        LocalDateTime fecha = LocalDateTime.parse(rs.getString("fecha"));
+        int clienteId = rs.getInt("cliente_id");
+
+        // Fecha en DATETIME → LocalDateTime
+        LocalDateTime fecha = rs.getTimestamp("fecha").toLocalDateTime();
+
         double total = rs.getDouble("total");
-        Map<Integer,Integer> items = stringToItems(rs.getString("items"));
+
+        // Items almacenados como "1:2;5:1;7:3"
+        String itemsStr = rs.getString("items");
+        Map<Integer, Integer> items = new LinkedHashMap<>();
+
+        if (itemsStr != null && !itemsStr.isBlank()) {
+            String[] pares = itemsStr.split(";");
+            for (String par : pares) {
+                if (!par.contains(":")) continue;
+                String[] kv = par.split(":");
+                int prodId = Integer.parseInt(kv[0]);
+                int cantidad = Integer.parseInt(kv[1]);
+                items.put(prodId, cantidad);
+            }
+        }
 
         return new Venta(id, clienteId, fecha, items, total);
     }
+
 
     private String itemsToString(Map<Integer,Integer> map) {
         return map.entrySet()

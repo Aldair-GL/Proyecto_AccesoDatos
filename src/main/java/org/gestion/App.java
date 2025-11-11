@@ -7,6 +7,8 @@ import org.gestion.model.*;
 import org.gestion.service.*;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class App {
@@ -30,7 +32,7 @@ public class App {
         System.out.println("===== SELECCIONE MODO DE OPERACIÓN =====");
         System.out.println("1) Modo Ficheros CSV");
         System.out.println("2) Modo Base de Datos JDBC");
-        System.out.println("3) Migrar datos desde CSV → BD");
+        System.out.println("3) Migrar datos entre CSV ↔ BD");
         System.out.print("Opción: ");
 
         int modo = leerInt(sc);
@@ -44,24 +46,23 @@ public class App {
             case 1 -> {
                 System.out.println("📁 Modo FICHEROS CSV activado.");
 
-                productoDAO = new FileProductoDAO(PROD_CSV);
-                clienteDAO  = new FileClienteDAO(CLI_CSV);
-                ventaDAO    = new FileVentaDAO(VEN_CSV);
+                productoDAO = fProdDAO;
+                clienteDAO  = fCliDAO;
+                ventaDAO    = fVenDAO;
             }
 
             case 2 -> {
                 System.out.println("🗄 Modo BASE DE DATOS JDBC activado.");
 
-                productoDAO = new JdbcProductoDAO();
-                clienteDAO  = new JdbcClienteDAO();
-                ventaDAO    = new JdbcVentaDAO();
+                productoDAO = jProdDAO;
+                clienteDAO  = jCliDAO;
+                ventaDAO    = jVenDAO;
             }
 
             case 3 -> {
-                migrarCSVaBD(fProdDAO, fCliDAO, fVenDAO, jProdDAO, jCliDAO, jVenDAO);
-                return;
+                menuMigraciones(sc, fProdDAO, fCliDAO, fVenDAO, jProdDAO, jCliDAO, jVenDAO);
+                return; // ✅ Salimos tras migrar
             }
-
 
             default -> {
                 System.out.println("Opción no válida.");
@@ -272,7 +273,7 @@ public class App {
     }
 
     // =============================================================
-    // ======================= MIGRACIÓN BD =========================
+    // ======================= MIGRACIONES ==========================
     // =============================================================
 
     private static void limpiarTablasBD() throws IOException {
@@ -293,34 +294,65 @@ public class App {
         }
     }
 
-
-    private static void migrarCSVaBD(FileProductoDAO fProdDAO, FileClienteDAO fCliDAO,
-                                     FileVentaDAO fVenDAO,
-                                     JdbcProductoDAO jProdDAO, JdbcClienteDAO jCliDAO, JdbcVentaDAO jVenDAO) throws IOException {
+    private static void migrarCSVaBD(
+            FileProductoDAO fProdDAO, FileClienteDAO fCliDAO, FileVentaDAO fVenDAO,
+            JdbcProductoDAO jProdDAO, JdbcClienteDAO jCliDAO, JdbcVentaDAO jVenDAO
+    ) throws IOException {
 
         System.out.println("🚀 Migrando datos CSV → BD...");
 
-        // ✅ Primero limpiar BD
         limpiarTablasBD();
 
-        // ✅ Insertar productos
-        for (Producto p : fProdDAO.findAll()) {
-            jProdDAO.add(p); // usa ID del CSV
-        }
+        for (Producto p : fProdDAO.findAll()) jProdDAO.add(p);
+        for (Cliente c : fCliDAO.findAll()) jCliDAO.add(c);
+        for (Venta v : fVenDAO.findAll())   jVenDAO.add(v);
 
-        // ✅ Insertar clientes
-        for (Cliente c : fCliDAO.findAll()) {
-            jCliDAO.add(c); // usa ID del CSV
-        }
-
-        // ✅ Insertar ventas
-        for (Venta v : fVenDAO.findAll()) {
-            jVenDAO.add(v); // ahora las FK existen
-        }
-
-        System.out.println("✅ Migración completada correctamente.");
+        System.out.println("✅ Migración CSV → BD completada.");
     }
 
+    private static void migrarBDaCSV(
+            FileProductoDAO fProdDAO, FileClienteDAO fCliDAO, FileVentaDAO fVenDAO,
+            JdbcProductoDAO jProdDAO, JdbcClienteDAO jCliDAO, JdbcVentaDAO jVenDAO
+    ) throws IOException {
+
+        System.out.println("🔄 Migrando datos BD → CSV...");
+
+        Files.writeString(Paths.get(PROD_CSV), "id,nombre,precio,stock\n");
+        Files.writeString(Paths.get(CLI_CSV),  "id,nombre,direccion,historialVentas\n");
+        Files.writeString(Paths.get(VEN_CSV),  "id,clienteId,fecha,total,items\n");
+
+        for (Producto p : jProdDAO.findAll()) fProdDAO.update(p);
+        for (Cliente c : jCliDAO.findAll())   fCliDAO.update(c);
+        for (Venta v : jVenDAO.findAll())     fVenDAO.update(v);
+
+        System.out.println("✅ Migración BD → CSV completada.");
+    }
+
+    private static void menuMigraciones(
+            Scanner sc,
+            FileProductoDAO fProdDAO, FileClienteDAO fCliDAO, FileVentaDAO fVenDAO,
+            JdbcProductoDAO jProdDAO, JdbcClienteDAO jCliDAO, JdbcVentaDAO jVenDAO
+    ) throws IOException {
+
+        boolean back = false;
+
+        while (!back) {
+            System.out.println("\n===== MIGRACIONES =====");
+            System.out.println("1) CSV → BD");
+            System.out.println("2) BD → CSV");
+            System.out.println("0) Volver");
+            System.out.print("Opción: ");
+
+            String op = sc.nextLine().trim();
+
+            switch (op) {
+                case "1" -> migrarCSVaBD(fProdDAO, fCliDAO, fVenDAO, jProdDAO, jCliDAO, jVenDAO);
+                case "2" -> migrarBDaCSV(fProdDAO, fCliDAO, fVenDAO, jProdDAO, jCliDAO, jVenDAO);
+                case "0" -> back = true;
+                default -> System.out.println("Opción inválida.");
+            }
+        }
+    }
 
     // =============================================================
     // ========================= UTILIDADES =========================
