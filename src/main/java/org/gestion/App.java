@@ -15,6 +15,14 @@ public class App {
     private static final String CLI_CSV  = "src/main/resources/clientes.csv";
     private static final String VEN_CSV  = "src/main/resources/ventas.csv";
 
+    static FileProductoDAO fProdDAO = new FileProductoDAO(PROD_CSV);
+    static FileClienteDAO fCliDAO  = new FileClienteDAO(CLI_CSV);
+    static FileVentaDAO   fVenDAO  = new FileVentaDAO(VEN_CSV);
+
+    static JdbcProductoDAO jProdDAO = new JdbcProductoDAO();
+    static JdbcClienteDAO  jCliDAO  = new JdbcClienteDAO();
+    static JdbcVentaDAO    jVenDAO  = new JdbcVentaDAO();
+
     public static void main(String[] args) throws Exception {
 
         Scanner sc = new Scanner(System.in);
@@ -50,9 +58,10 @@ public class App {
             }
 
             case 3 -> {
-                migrarCSVaBD();
+                migrarCSVaBD(fProdDAO, fCliDAO, fVenDAO, jProdDAO, jCliDAO, jVenDAO);
                 return;
             }
+
 
             default -> {
                 System.out.println("Opción no válida.");
@@ -266,31 +275,52 @@ public class App {
     // ======================= MIGRACIÓN BD =========================
     // =============================================================
 
-    private static void migrarCSVaBD() throws Exception {
+    private static void limpiarTablasBD() throws IOException {
+        try (var conn = org.gestion.db.ConnectionManager.getConnection();
+             var st = conn.createStatement()) {
+
+            st.execute("SET FOREIGN_KEY_CHECKS = 0");
+
+            st.execute("TRUNCATE TABLE ventas");
+            st.execute("TRUNCATE TABLE productos");
+            st.execute("TRUNCATE TABLE clientes");
+
+            st.execute("SET FOREIGN_KEY_CHECKS = 1");
+
+            System.out.println("🧹 BD limpiada correctamente.");
+        } catch (Exception e) {
+            throw new IOException("Error limpiando tablas BD", e);
+        }
+    }
+
+
+    private static void migrarCSVaBD(FileProductoDAO fProdDAO, FileClienteDAO fCliDAO,
+                                     FileVentaDAO fVenDAO,
+                                     JdbcProductoDAO jProdDAO, JdbcClienteDAO jCliDAO, JdbcVentaDAO jVenDAO) throws IOException {
 
         System.out.println("🚀 Migrando datos CSV → BD...");
 
-        // DAOs CSV
-        var csvProd = new FileProductoDAO(PROD_CSV);
-        var csvCli  = new FileClienteDAO(CLI_CSV);
-        var csvVen  = new FileVentaDAO(VEN_CSV);
+        // ✅ Primero limpiar BD
+        limpiarTablasBD();
 
-        // DAOs JDBC
-        var bdProd = new JdbcProductoDAO();
-        var bdCli  = new JdbcClienteDAO();
-        var bdVen  = new JdbcVentaDAO();
+        // ✅ Insertar productos
+        for (Producto p : fProdDAO.findAll()) {
+            jProdDAO.add(p); // usa ID del CSV
+        }
 
-        // 1) Migrar productos
-        for (var p : csvProd.findAll()) bdProd.add(p);
+        // ✅ Insertar clientes
+        for (Cliente c : fCliDAO.findAll()) {
+            jCliDAO.add(c); // usa ID del CSV
+        }
 
-        // 2) Migrar clientes
-        for (var c : csvCli.findAll()) bdCli.add(c);
-
-        // 3) Migrar ventas
-        for (var v : csvVen.findAll()) bdVen.add(v);
+        // ✅ Insertar ventas
+        for (Venta v : fVenDAO.findAll()) {
+            jVenDAO.add(v); // ahora las FK existen
+        }
 
         System.out.println("✅ Migración completada correctamente.");
     }
+
 
     // =============================================================
     // ========================= UTILIDADES =========================
